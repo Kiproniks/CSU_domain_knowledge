@@ -1,126 +1,200 @@
-﻿# Intelligent Library (Python-only Web UI)
+# Intelligent Library (веб-интерфейс только на Python)
 
-This project is now focused on Python-only runtime components:
-- Django backend (API + server-rendered web UI)
-- Celery background processing
-- PostgreSQL
-- Redis
-- aiogram Telegram bot
-- Optional Ollama for LLM mode
+Сейчас проект полностью ориентирован на компоненты, работающие на Python:
 
-The React/Vite frontend is no longer required to run the project.
+* Django — backend, API и серверный веб-интерфейс;
+* Celery — фоновые задачи;
+* PostgreSQL — база данных;
+* Redis — брокер сообщений и хранилище результатов;
+* aiogram — Telegram-бот;
+* Ollama — опционально для работы с LLM.
 
-## What the system does
+React/Vite больше не требуется для запуска проекта.
 
-1. Uploads FB2/PDF books.
-2. Validates XML and file size (max 50 MB).
-3. Computes SHA-256 hash and reuses global cache for duplicate books.
-4. Splits text into logical blocks.
-5. Groups blocks into major themes.
-6. Extracts 2-4 subtopics for each theme.
-7. Stores concept mentions linked to source blocks.
-8. Builds full book summary.
-9. Supports concept search and concept comparison across user books.
-10. Exports analysis to PDF/TXT/CSV/JSON.
-11. Builds an interactive concept/subtheme map with filters and drill-down.
+## Что умеет система
 
-## Python-only web interface
+1. Загружать книги в форматах FB2 и PDF.
+2. Проверять XML и размер файла (максимум 50 МБ).
+3. Вычислять SHA-256 хеш книги и использовать общий кэш для уже загруженных книг.
+4. Разбивать текст на логические блоки.
+5. Группировать блоки по основным темам.
+6. Выделять от 2 до 4 подтем для каждой темы.
+7. Сохранять упоминания понятий и связывать их с исходными блоками текста.
+8. Формировать полное содержание и краткое описание книги.
+9. Искать понятия и сравнивать их между книгами пользователя.
+10. Экспортировать результаты анализа в PDF, TXT, CSV и JSON.
+11. Строить интерактивную карту понятий и подтем с фильтрами и возможностью переходить на более подробный уровень.
 
-Main pages are implemented as Django templates:
-- `/login/`
-- `/register/`
-- `/library/`
-- `/library/books/<book_id>/`
-- `/library/books/<book_id>/blocks/<block_id>/`
-- `/library/concepts/`
-- `/library/concepts/<concept_id>/`
-- `/library/concepts/<concept_id>/compare/`
-- `/library/map/`
+## Веб-интерфейс на Python
 
-## Smart semantic split (chapter -> logical thoughts)
+Основные страницы реализованы с помощью Django Templates:
 
-The pipeline now splits text in two levels:
-1. Structural chapters from source (`FB2 section/title` or `PDF page` fallback).
-2. Semantic logical blocks inside each chapter using:
-   - paragraph embeddings,
-   - cosine drop points between neighboring paragraphs,
-   - transition cue words,
-   - minimum/target/maximum block size constraints.
+* `/login/` — вход;
+* `/register/` — регистрация;
+* `/library/` — библиотека пользователя;
+* `/library/books/<book_id>/` — информация о книге;
+* `/library/books/<book_id>/blocks/<block_id>/` — просмотр блока книги;
+* `/library/concepts/` — список понятий;
+* `/library/concepts/<concept_id>/` — информация о понятии;
+* `/library/concepts/<concept_id>/compare/` — сравнение понятия;
+* `/library/map/` — интерактивная карта.
 
-Tuning variables in `.env`:
-- `BLOCK_MIN_WORDS`
-- `BLOCK_TARGET_WORDS`
-- `BLOCK_MAX_WORDS`
+## Умное семантическое разбиение текста
 
-## Core models
+Pipeline обработки текста работает в два этапа.
 
-- `GlobalBookCache`
-- `UserBook`
-- `LogicalBlock`
-- `BookTheme`
-- `ThemeSubtopic`
-- `Concept`
-- `ConceptMention`
-- `UserConceptEdit`
-- `BookSummary`
+### 1. Структурное разбиение
 
-Legacy glossary models are kept only for migration compatibility.
+Сначала используются главы и разделы, которые уже есть в исходном документе:
 
-## API (kept and working)
+* разделы и заголовки из FB2;
+* страницы PDF, если структурные данные недоступны.
 
-Auth:
-- `POST /api/auth/register/`
-- `POST /api/auth/login/`
-- `POST /api/auth/logout/`
-- `GET /api/auth/me/`
+### 2. Семантическое разбиение
 
-Books:
-- `GET /api/books/`
-- `POST /api/books/upload/`
-- `GET /api/books/{id}/`
-- `DELETE /api/books/{id}/`
-- `POST /api/books/{id}/protect/`
-- `POST /api/books/{id}/reanalyze/`
-- `GET /api/books/{id}/summary/`
-- `GET /api/books/{id}/blocks/`
-- `GET /api/books/{id}/blocks/{block_id}/`
-- `GET /api/books/{id}/concepts/`
-- `GET /api/books/{id}/export/?format=pdf|txt|csv|json`
+Внутри каждой главы текст дополнительно разбивается на логические блоки.
 
-Concepts:
-- `GET /api/concepts/`
-- `GET /api/concepts/search/?q=...`
-- `GET /api/concepts/{concept_id}/`
-- `GET /api/concepts/{concept_id}/compare/`
-- `PATCH /api/concepts/mentions/{mention_id}/edit/`
-- `POST /api/concepts/mentions/{mention_id}/reset/`
+Для этого используются:
 
-Stats:
-- `GET /api/stats/`
+* embeddings абзацев;
+* точки резкого изменения косинусного сходства между соседними абзацами;
+* переходные слова и фразы;
+* ограничения минимального, целевого и максимального размера блока.
 
-## Environment
+Основные параметры можно настроить через `.env`:
 
-Copy `.env.example` to `.env` and set values.
+```env
+BLOCK_MIN_WORDS
+BLOCK_TARGET_WORDS
+BLOCK_MAX_WORDS
+```
 
-Important vars:
-- `DATABASE_URL` or `POSTGRES_*`
-- `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`
-- `LLM_PROVIDER`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
-- `VECTOR_STORE`, `CHROMA_PATH`, `EMBEDDING_MODEL`
-- `TELEGRAM_BOT_TOKEN`
+## Основные модели
 
-## Run with local PostgreSQL/Redis
+В проекте используются следующие модели:
+
+* `GlobalBookCache` — общий кэш загруженных книг;
+* `UserBook` — книга пользователя;
+* `LogicalBlock` — логический блок текста;
+* `BookTheme` — тема книги;
+* `ThemeSubtopic` — подтема;
+* `Concept` — понятие;
+* `ConceptMention` — упоминание понятия в тексте;
+* `UserConceptEdit` — пользовательское редактирование понятия;
+* `BookSummary` — краткое содержание книги.
+
+Старые модели глоссария сохранены только для совместимости с миграциями.
+
+## API
+
+API продолжает работать и включает следующие endpoints.
+
+### Авторизация
+
+```text
+POST /api/auth/register/
+POST /api/auth/login/
+POST /api/auth/logout/
+GET  /api/auth/me/
+```
+
+### Книги
+
+```text
+GET    /api/books/
+POST   /api/books/upload/
+GET    /api/books/{id}/
+DELETE /api/books/{id}/
+POST   /api/books/{id}/protect/
+POST   /api/books/{id}/reanalyze/
+GET    /api/books/{id}/summary/
+GET    /api/books/{id}/blocks/
+GET    /api/books/{id}/blocks/{block_id}/
+GET    /api/books/{id}/concepts/
+GET    /api/books/{id}/export/?format=pdf|txt|csv|json
+```
+
+### Понятия
+
+```text
+GET   /api/concepts/
+GET   /api/concepts/search/?q=...
+GET   /api/concepts/{concept_id}/
+GET   /api/concepts/{concept_id}/compare/
+PATCH /api/concepts/mentions/{mention_id}/edit/
+POST  /api/concepts/mentions/{mention_id}/reset/
+```
+
+### Статистика
+
+```text
+GET /api/stats/
+```
+
+## Настройка окружения
+
+Скопируйте `.env.example` в `.env` и укажите необходимые значения.
+
+Основные переменные:
+
+```env
+DATABASE_URL
+POSTGRES_*
+
+REDIS_URL
+CELERY_BROKER_URL
+CELERY_RESULT_BACKEND
+
+LLM_PROVIDER
+OLLAMA_BASE_URL
+OLLAMA_MODEL
+
+VECTOR_STORE
+CHROMA_PATH
+EMBEDDING_MODEL
+
+TELEGRAM_BOT_TOKEN
+```
+
+## Запуск с локальными PostgreSQL и Redis
+
+Перейдите в папку backend:
 
 ```powershell
 cd backend
+```
+
+Создайте виртуальное окружение:
+
+```powershell
 python -m venv venv
+```
+
+Активируйте его:
+
+```powershell
 .\venv\Scripts\activate
+```
+
+Установите зависимости:
+
+```powershell
 pip install -r requirements.txt
+```
+
+Примените миграции:
+
+```powershell
 python manage.py migrate
+```
+
+Запустите Django:
+
+```powershell
 python manage.py runserver
 ```
 
-In a second terminal:
+В отдельном терминале запустите Celery:
 
 ```powershell
 cd backend
@@ -128,26 +202,35 @@ cd backend
 celery -A config worker -l info --pool=solo
 ```
 
-Open web UI:
-- `http://127.0.0.1:8000/login/`
+После запуска веб-интерфейс доступен по адресу:
 
-## Run DB/Redis with Docker (optional)
+```text
+http://127.0.0.1:8000/login/
+```
 
-If Docker is installed:
+## Запуск PostgreSQL и Redis через Docker
+
+Если установлен Docker, PostgreSQL и Redis можно запустить командой:
 
 ```powershell
 docker compose up -d postgres redis
 ```
 
-## Ollama (optional)
+## Ollama
+
+Ollama используется для запуска языковой модели локально.
+
+Например:
 
 ```bash
 ollama pull qwen2.5:1.5b
 ```
 
-If Ollama is unavailable, fallback logic is used and the project still works.
+Использование Ollama является необязательным. Если Ollama недоступна, система использует fallback-логику, поэтому проект продолжает работать.
 
-## Telegram bot
+## Telegram-бот
+
+Для запуска Telegram-бота:
 
 ```powershell
 cd backend
@@ -155,7 +238,11 @@ cd backend
 python -m apps.telegram_bot.bot
 ```
 
-## Tests
+Для работы бота необходимо указать `TELEGRAM_BOT_TOKEN` в `.env`.
+
+## Тесты
+
+Для запуска тестов:
 
 ```powershell
 cd backend
