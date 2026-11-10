@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = "SilentlyContinue"
-$root = "C:\Users\1\Desktop\НИКОЛАЕВ"
+$root = $PSScriptRoot
 $inbox = Join-Path $root "backend\media\books\inbox"
 New-Item -ItemType Directory -Force -Path $inbox | Out-Null
 while ($true) {

@@ -7,6 +7,8 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
 
 # Virtualenvs
 venv/
@@ -20,21 +22,26 @@ backend/staticfiles/
 
 # Secrets
 .env
-backend/.env
+.env.*
+!.env.example
 
 # IDE / OS
 .vscode/
 .idea/
 *.swp
 *.tmp
+*.log
 Thumbs.db
 .DS_Store
 
 # Runtime logs/data
 run_logs/
 postgres_data/
+redis_data/
 chroma_db/
-backend/chroma_db/
+*.sqlite3
+*.sqlite3-*
+celerybeat-schedule*
 
 # Node (if added later)
 node_modules/
