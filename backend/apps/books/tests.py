@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 from io import BytesIO
 
@@ -81,19 +82,7 @@ class BooksConceptPipelineTests(APITestCase):
             status=UserBook.Status.PROCESSING,
         )
         book.file.save("book.fb2", ContentFile(VALID_FB2), save=True)
-        with patch("apps.books.tasks.summarize_logical_block", return_value="Short block summary"), patch(
-            "apps.books.tasks.extract_concepts_from_block",
-            return_value=[
-                {
-                    "name": "Квантовая физика",
-                    "short_explanation": "Ключевая идея блока.",
-                    "source_quote": "Квантовая физика рассматривает поведение частиц.",
-                    "importance_score": 0.9,
-                }
-            ],
-        ), patch("apps.books.tasks.summarize_book", return_value="General summary"), patch(
-            "apps.books.tasks.save_logical_block_embedding", return_value="block:1"
-        ):
+        with patch.dict(os.environ, {"LLM_PROVIDER": "none", "VECTOR_STORE": "none", "EMBEDDING_DISABLE_ST": "1"}):
             analyze_book_task(book.id, force_reanalyze=True)
         book.refresh_from_db()
         return book
