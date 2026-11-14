@@ -1,251 +1,53 @@
-# Intelligent Library (веб-интерфейс только на Python)
+# Личная библиотека с анализом книг FB2 и PDF
 
-Сейчас проект полностью ориентирован на компоненты, работающие на Python:
+Сервис помогает читателям учебной и профессиональной литературы возвращаться к нужным фрагментам книги без повторного чтения целых глав. Пользователь загружает книгу и получает краткое содержание, структуру тем и карту понятий с привязкой к исходному тексту.
 
-* Django — backend, API и серверный веб-интерфейс;
-* Celery — фоновые задачи;
-* PostgreSQL — база данных;
-* Redis — брокер сообщений и хранилище результатов;
-* aiogram — Telegram-бот;
-* Ollama — опционально для работы с LLM.
+## Функциональность
 
-React/Vite больше не требуется для запуска проекта.
+- Загрузка FB2 и PDF с текстовым слоем, проверка формата и размера файла (до 50 МБ).
+- Просмотр конспекта, тем, подтем и логических блоков книги.
+- Поиск и сравнение понятий в своей библиотеке, просмотр исходных фрагментов и персональные правки к упоминаниям.
+- Интерактивная карта тем и понятий, экспорт анализа из веб-интерфейса в PDF, TXT, CSV и JSON.
+- Управление библиотекой через веб-интерфейс и основные операции с книгами через Telegram-бота.
 
-## Что умеет система
+## Архитектура и проектирование
 
-1. Загружать книги в форматах FB2 и PDF.
-2. Проверять XML и размер файла (максимум 50 МБ).
-3. Вычислять SHA-256 хеш книги и использовать общий кэш для уже загруженных книг.
-4. Разбивать текст на логические блоки.
-5. Группировать блоки по основным темам.
-6. Выделять от 2 до 4 подтем для каждой темы.
-7. Сохранять упоминания понятий и связывать их с исходными блоками текста.
-8. Формировать полное содержание и краткое описание книги.
-9. Искать понятия и сравнивать их между книгами пользователя.
-10. Экспортировать результаты анализа в PDF, TXT, CSV и JSON.
-11. Строить интерактивную карту понятий и подтем с фильтрами и возможностью переходить на более подробный уровень.
+- **Модель данных.** `UserBook` хранит владельца, статус и настройки книги. `GlobalBookCache` хранит общий результат анализа по SHA-256 файла: повторная загрузка может использовать готовый результат. `ConceptMention` связывает понятие с исходным блоком, а `UserConceptEdit` хранит правку отдельно от общего результата.
+- **Обработка.** После проверки файла Django ставит задачу в Celery. Задача извлекает текст, выделяет логические блоки, строит иерархию тем и подтем и сохраняет конспект. Статус книги отражает ход обработки и её исход. Ollama может участвовать в анализе; предусмотрены эвристики для работы без неё.
+- **Интерфейсы.** Django Templates обслуживают веб-интерфейс. REST API использует токены: `/api/auth/` — регистрация и вход, `POST /api/books/upload/` — загрузка, `GET /api/books/{id}/summary/` — результат, `GET /api/concepts/search/` — поиск. Доступ к книгам ограничен библиотекой пользователя.
 
-## Веб-интерфейс на Python
+## Технологии
 
-Основные страницы реализованы с помощью Django Templates:
+Python, Django, Django REST Framework, PostgreSQL, Celery, Redis, aiogram. ChromaDB и Sentence Transformers используются для работы с векторами текста, pypdf и lxml — для разбора файлов, Ollama — для локальной языковой модели.
 
-* `/login/` — вход;
-* `/register/` — регистрация;
-* `/library/` — библиотека пользователя;
-* `/library/books/<book_id>/` — информация о книге;
-* `/library/books/<book_id>/blocks/<block_id>/` — просмотр блока книги;
-* `/library/concepts/` — список понятий;
-* `/library/concepts/<concept_id>/` — информация о понятии;
-* `/library/concepts/<concept_id>/compare/` — сравнение понятия;
-* `/library/map/` — интерактивная карта.
+## Запуск
 
-## Умное семантическое разбиение текста
-
-Pipeline обработки текста работает в два этапа.
-
-### 1. Структурное разбиение
-
-Сначала используются главы и разделы, которые уже есть в исходном документе:
-
-* разделы и заголовки из FB2;
-* страницы PDF, если структурные данные недоступны.
-
-### 2. Семантическое разбиение
-
-Внутри каждой главы текст дополнительно разбивается на логические блоки.
-
-Для этого используются:
-
-* embeddings абзацев;
-* точки резкого изменения косинусного сходства между соседними абзацами;
-* переходные слова и фразы;
-* ограничения минимального, целевого и максимального размера блока.
-
-Основные параметры можно настроить через `.env`:
-
-```env
-BLOCK_MIN_WORDS
-BLOCK_TARGET_WORDS
-BLOCK_MAX_WORDS
-```
-
-## Основные модели
-
-В проекте используются следующие модели:
-
-* `GlobalBookCache` — общий кэш загруженных книг;
-* `UserBook` — книга пользователя;
-* `LogicalBlock` — логический блок текста;
-* `BookTheme` — тема книги;
-* `ThemeSubtopic` — подтема;
-* `Concept` — понятие;
-* `ConceptMention` — упоминание понятия в тексте;
-* `UserConceptEdit` — пользовательское редактирование понятия;
-* `BookSummary` — краткое содержание книги.
-
-Старые модели глоссария сохранены только для совместимости с миграциями.
-
-## API
-
-API продолжает работать и включает следующие endpoints.
-
-### Авторизация
-
-```text
-POST /api/auth/register/
-POST /api/auth/login/
-POST /api/auth/logout/
-GET  /api/auth/me/
-```
-
-### Книги
-
-```text
-GET    /api/books/
-POST   /api/books/upload/
-GET    /api/books/{id}/
-DELETE /api/books/{id}/
-POST   /api/books/{id}/protect/
-POST   /api/books/{id}/reanalyze/
-GET    /api/books/{id}/summary/
-GET    /api/books/{id}/blocks/
-GET    /api/books/{id}/blocks/{block_id}/
-GET    /api/books/{id}/concepts/
-GET    /api/books/{id}/export/?format=pdf|txt|csv|json
-```
-
-### Понятия
-
-```text
-GET   /api/concepts/
-GET   /api/concepts/search/?q=...
-GET   /api/concepts/{concept_id}/
-GET   /api/concepts/{concept_id}/compare/
-PATCH /api/concepts/mentions/{mention_id}/edit/
-POST  /api/concepts/mentions/{mention_id}/reset/
-```
-
-### Статистика
-
-```text
-GET /api/stats/
-```
-
-## Настройка окружения
-
-Скопируйте `.env.example` в `.env` и укажите необходимые значения.
-
-Основные переменные:
-
-```env
-DATABASE_URL
-POSTGRES_*
-
-REDIS_URL
-CELERY_BROKER_URL
-CELERY_RESULT_BACKEND
-
-LLM_PROVIDER
-OLLAMA_BASE_URL
-OLLAMA_MODEL
-
-VECTOR_STORE
-CHROMA_PATH
-EMBEDDING_MODEL
-
-TELEGRAM_BOT_TOKEN
-```
-
-## Запуск с локальными PostgreSQL и Redis
-
-Перейдите в папку backend:
+Для локального демо на Windows понадобятся Python 3.12 и uv. Выполните из корня репозитория в PowerShell:
 
 ```powershell
-cd backend
+uv venv --python 3.12 .venv
+uv pip install --python .venv/Scripts/python.exe --only-binary chroma-hnswlib -r backend/requirements.txt
+Copy-Item .env.example .env
 ```
 
-Создайте виртуальное окружение:
+В `.env` установите следующие значения, заменив существующие строки и раскомментировав параметры SQLite и Celery:
+
+```dotenv
+USE_SQLITE=True
+CELERY_TASK_ALWAYS_EAGER=True
+LLM_PROVIDER=none
+VECTOR_STORE=none
+EMBEDDING_DISABLE_ST=1
+```
+
+В этом режиме книга анализируется в процессе Django: для демо не нужны PostgreSQL, Redis, Ollama и загрузка модели эмбеддингов.
 
 ```powershell
-python -m venv venv
+Set-Location backend
+..\.venv\Scripts\python.exe manage.py migrate
+..\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Активируйте его:
+Откройте [страницу регистрации](http://127.0.0.1:8000/register/), затем загрузите свой FB2 или PDF с текстовым слоем. Тесты запускаются из `backend/`: `..\.venv\Scripts\python.exe manage.py test`.
 
-```powershell
-.\venv\Scripts\activate
-```
-
-Установите зависимости:
-
-```powershell
-pip install -r requirements.txt
-```
-
-Примените миграции:
-
-```powershell
-python manage.py migrate
-```
-
-Запустите Django:
-
-```powershell
-python manage.py runserver
-```
-
-В отдельном терминале запустите Celery:
-
-```powershell
-cd backend
-.\venv\Scripts\activate
-celery -A config worker -l info --pool=solo
-```
-
-После запуска веб-интерфейс доступен по адресу:
-
-```text
-http://127.0.0.1:8000/login/
-```
-
-## Запуск PostgreSQL и Redis через Docker
-
-Если установлен Docker, PostgreSQL и Redis можно запустить командой:
-
-```powershell
-docker compose up -d postgres redis
-```
-
-## Ollama
-
-Ollama используется для запуска языковой модели локально.
-
-Например:
-
-```bash
-ollama pull qwen2.5:1.5b
-```
-
-Использование Ollama является необязательным. Если Ollama недоступна, система использует fallback-логику, поэтому проект продолжает работать.
-
-## Telegram-бот
-
-Для запуска Telegram-бота:
-
-```powershell
-cd backend
-.\venv\Scripts\activate
-python -m apps.telegram_bot.bot
-```
-
-Для работы бота необходимо указать `TELEGRAM_BOT_TOKEN` в `.env`.
-
-## Тесты
-
-Для запуска тестов:
-
-```powershell
-cd backend
-.\venv\Scripts\activate
-python manage.py test
-```
+Для фоновой обработки используйте PostgreSQL и Redis из [Docker Compose](docker-compose.yml): из корня запустите `docker compose up -d postgres redis`, а в `.env` отключите SQLite и синхронный режим Celery. Повторите миграции для PostgreSQL и запустите воркер из `backend/` в отдельном терминале: `..\.venv\Scripts\celery.exe -A config worker -l info --pool=solo`.

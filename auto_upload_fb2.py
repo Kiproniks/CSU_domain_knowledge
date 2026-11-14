@@ -5,14 +5,16 @@ import time
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent
+load_dotenv(ROOT / '.env')
 INBOX = ROOT / 'backend' / 'media' / 'books' / 'inbox'
 STATE_PATH = ROOT / 'run_logs' / 'fb2_uploaded_state.json'
 LOG_PATH = ROOT / 'run_logs' / 'fb2_uploader.log'
 BASE = 'http://127.0.0.1:8000'
-EMAIL = 'student@local.local'
-PASSWORD = 'Student123!'
+EMAIL = os.getenv('FB2_UPLOAD_EMAIL')
+PASSWORD = os.getenv('FB2_UPLOAD_PASSWORD')
 
 INBOX.mkdir(parents=True, exist_ok=True)
 STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -61,6 +63,8 @@ def get_token(session: requests.Session) -> str | None:
 
 
 def main() -> None:
+    if not EMAIL or not PASSWORD:
+        raise SystemExit('Set FB2_UPLOAD_EMAIL and FB2_UPLOAD_PASSWORD before running the uploader.')
     uploaded = load_state()
     session = requests.Session()
     token = None
